@@ -65,10 +65,12 @@ impl GameState {
         let mut transform = Transform::default();
         transform.set_translation_z(1.0);
 
-        let (width, height) = {
+        let (width, height) = /* {
+            println!("before");
             let dim = world.read_resource::<ScreenDimensions>();
+            println!("after");
             (dim.width(), dim.height())
-        };
+        }; */ (800., 600.);
 
         world
             .create_entity()
