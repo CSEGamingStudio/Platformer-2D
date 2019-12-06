@@ -1,0 +1,8 @@
+(
+  axes: {
+    "movement": Emulated(pos: Key(D), neg: Key(Q)),
+  },
+  actions: {
+    "jump": [[Key(Space)], [Key(Up)], [Key(Z)]],
+  },
+)
