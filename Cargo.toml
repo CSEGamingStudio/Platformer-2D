@@ -9,9 +9,9 @@ edition = "2018"
 [dependencies]
 amethyst = "0.13"
 amethyst_tiles = "0.1"
-amethyst_window = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 tiled = "0.8"
+nalgebra = "0.18"
 
 [features]
 default = ["amethyst/vulkan"]

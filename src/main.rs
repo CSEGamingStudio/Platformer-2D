@@ -1,8 +1,8 @@
-#![allow(unused_variables)]
+#![allow(unused_variables, unused_imports, dead_code)]
 
 extern crate amethyst;
 extern crate amethyst_tiles;
-extern crate amethyst_window;
+extern crate nalgebra;
 extern crate tiled;
 
 mod components;
@@ -26,9 +26,10 @@ use amethyst::{
     ui::{RenderUi, UiBundle},
     utils::application_root_dir,
 };
-use amethyst_tiles::{MortonEncoder2D, RenderTiles2D};
+use amethyst_tiles::RenderTiles2D;
 
 use game::GameState;
+use tiles::MiscTile;
 
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
@@ -49,7 +50,8 @@ fn main() -> amethyst::Result<()> {
                         .with_clear([0.0, 0.0, 0.0, 1.0]),
                 )
                 .with_plugin(RenderFlat2D::default())
-                .with_plugin(RenderUi::default()),
+                .with_plugin(RenderUi::default())
+                .with_plugin(RenderTiles2D::<MiscTile>::default()),
         )?
         .with_bundle(TransformBundle::new())?
         .with_bundle(input_bundle)?

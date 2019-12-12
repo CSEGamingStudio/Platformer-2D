@@ -31,10 +31,7 @@ impl<'s> System<'s> for PlayerInputSystem {
                         0 => 1,
                         1 => 2,
                         2 => 1,
-                        _ => {
-                            println!("error {}", sprite.sprite_number);
-                            0
-                        }
+                        _ => unreachable!()
                     };
                     transform.prepend_translation_x(scaled_amount);
                 } else {
