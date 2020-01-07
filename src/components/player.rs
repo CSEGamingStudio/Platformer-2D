@@ -1,15 +1,12 @@
 //! The player component
-//! All entity with this component can be controlled by the player
+//! All entities with this component can be controlled by the player
 
-use amethyst::{assets::PrefabData, derive::PrefabData, ecs::prelude::*, Error};
-use serde::{Deserialize, Serialize};
+use amethyst::ecs::prelude::{Component, NullStorage};
 
-/// Basic component for the player, making him move
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PrefabData)]
-#[prefab(Component)]
-#[serde(deny_unknown_fields)]
+/// Basic component for the player, making him movable by the user
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Player;
 
 impl Component for Player {
-    type Storage = VecStorage<Self>;
+    type Storage = NullStorage<Self>;
 }

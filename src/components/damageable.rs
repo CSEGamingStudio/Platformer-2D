@@ -1,13 +1,7 @@
 //! The damageable component
 //! All the entities that could receive damage should have it
 
-use amethyst::{
-    assets::{PrefabData, ProgressCounter},
-    core::Transform,
-    derive::PrefabData,
-    ecs::prelude::*,
-    Error,
-};
+use amethyst::ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Component for entities that have a life and can be damaged

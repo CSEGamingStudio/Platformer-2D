@@ -1,8 +1,12 @@
-#![allow(unused_variables, unused_imports, dead_code)]
+#![allow(dead_code)]
 
 extern crate amethyst;
+extern crate amethyst_nphysics;
+extern crate amethyst_physics;
 extern crate amethyst_tiles;
-extern crate nalgebra;
+extern crate nalgebra as na;
+extern crate ncollide2d;
+extern crate nphysics2d;
 extern crate tiled;
 
 mod components;
@@ -14,7 +18,7 @@ mod tiles;
 
 use amethyst::StateEventReader;
 use amethyst::{
-    audio::{AudioBundle, DjSystem},
+    audio::AudioBundle,
     core::{frame_limiter::FrameRateLimitStrategy, transform::TransformBundle},
     input::{InputBundle, StringBindings},
     prelude::*,
@@ -26,6 +30,8 @@ use amethyst::{
     ui::{RenderUi, UiBundle},
     utils::application_root_dir,
 };
+use amethyst_nphysics::NPhysicsBackend;
+use amethyst_physics::PhysicsBundle;
 use amethyst_tiles::RenderTiles2D;
 
 use game::GameState;
@@ -41,7 +47,6 @@ fn main() -> amethyst::Result<()> {
     let input_bundle =
         InputBundle::<StringBindings>::new().with_bindings_from_file(binding_path)?;
 
-    let world = World::new();
     let game_data = GameDataBuilder::default()
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
@@ -57,11 +62,16 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(input_bundle)?
         .with_bundle(UiBundle::<StringBindings>::new())?
         .with_bundle(AudioBundle::default())?
-        .with(
-            systems::PlayerInputSystem,
-            "player_input_system",
-            &["input_system"],
-        );
+        .with_bundle(
+            PhysicsBundle::<f32, NPhysicsBackend>::new()
+                .with_pre_physics(
+                    systems::PlayerInputSystem::default(),
+                    String::from("player_input_system"),
+                    vec![],
+                )
+                .with_frames_per_seconds(60)
+                .with_max_sub_steps(8),
+        )?;
 
     let assets_dir = app_root.join("assets");
     let mut game: CoreApplication<'_, GameData<'static, 'static>, StateEvent, StateEventReader> =
