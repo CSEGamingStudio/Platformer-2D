@@ -1,13 +1,9 @@
 //! Implement all the stuff to use Tiled map with amethyst
 
-use amethyst::{
-    assets::{Asset, Format, Handle, ProcessingState},
-    ecs::prelude::*,
-    error::Error,
-};
-use amethyst_tiles::{Tile, TileMap};
-use nalgebra::Point3;
-use tiled::{parse_file, Map, TiledError};
+use amethyst::core::math::Point3;
+use amethyst::ecs::prelude::{World, WorldExt};
+use amethyst_tiles::Tile;
+use tiled::{parse_file, Map};
 
 use std::path::Path;
 

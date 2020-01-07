@@ -11,7 +11,11 @@ amethyst = "0.13"
 amethyst_tiles = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 tiled = "0.8"
-nalgebra = "0.18"
+nalgebra = "0.19"
+nphysics2d = "0.13"
+ncollide2d = "0.21"
+amethyst_physics = "0.1"
+amethyst_nphysics = "0.1"
 
 [features]
 default = ["amethyst/vulkan"]
