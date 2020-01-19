@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![warn(clippy::all)]
 
 extern crate amethyst;
 extern crate amethyst_nphysics;
@@ -7,10 +8,12 @@ extern crate amethyst_tiles;
 extern crate nalgebra as na;
 extern crate ncollide2d;
 extern crate nphysics2d;
+extern crate serde;
 extern crate tiled;
 
 mod components;
 mod game;
+mod load;
 mod menu;
 mod prefabs;
 mod systems;
@@ -18,6 +21,7 @@ mod tiles;
 
 use amethyst::StateEventReader;
 use amethyst::{
+    assets::PrefabLoaderSystemDesc,
     audio::AudioBundle,
     core::{frame_limiter::FrameRateLimitStrategy, transform::TransformBundle},
     input::{InputBundle, StringBindings},
@@ -34,7 +38,8 @@ use amethyst_nphysics::NPhysicsBackend;
 use amethyst_physics::PhysicsBundle;
 use amethyst_tiles::RenderTiles2D;
 
-use game::GameState;
+use load::LoadState;
+use prefabs::PlayerPrefab;
 use tiles::MiscTile;
 
 fn main() -> amethyst::Result<()> {
@@ -71,11 +76,16 @@ fn main() -> amethyst::Result<()> {
                 )
                 .with_frames_per_seconds(60)
                 .with_max_sub_steps(8),
-        )?;
+        )?
+        .with_system_desc(
+            PrefabLoaderSystemDesc::<PlayerPrefab>::default(),
+            "player_loader",
+            &[],
+        );
 
     let assets_dir = app_root.join("assets");
     let mut game: CoreApplication<'_, GameData<'static, 'static>, StateEvent, StateEventReader> =
-        ApplicationBuilder::new(assets_dir, GameState::default())?
+        ApplicationBuilder::new(assets_dir, LoadState::default())?
             .with_frame_limit(FrameRateLimitStrategy::Yield, 24)
             .build(game_data)?;
     game.run();
