@@ -22,7 +22,11 @@ impl Tile for MiscTile {
         let map = world.read_resource::<Map>();
         let layer = &map.layers[0];
         let (x, y) = (coordinates[0] as usize, coordinates[1] as usize);
-        Some((layer.tiles[y][x] as usize) - 1)
+        if layer.tiles[y][x] > 0 {
+            Some(layer.tiles[y][x] as usize - 1)
+        } else {
+            None
+        }
     }
 }
 

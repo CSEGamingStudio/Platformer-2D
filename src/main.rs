@@ -1,16 +1,11 @@
 #![allow(dead_code)]
+#![warn(clippy::all)]
 
-extern crate amethyst;
-extern crate amethyst_nphysics;
-extern crate amethyst_physics;
-extern crate amethyst_tiles;
 extern crate nalgebra as na;
-extern crate ncollide2d;
-extern crate nphysics2d;
-extern crate tiled;
 
 mod components;
 mod game;
+mod load;
 mod menu;
 mod prefabs;
 mod systems;
@@ -18,6 +13,7 @@ mod tiles;
 
 use amethyst::StateEventReader;
 use amethyst::{
+    assets::PrefabLoaderSystemDesc,
     audio::AudioBundle,
     core::{frame_limiter::FrameRateLimitStrategy, transform::TransformBundle},
     input::{InputBundle, StringBindings},
@@ -30,11 +26,10 @@ use amethyst::{
     ui::{RenderUi, UiBundle},
     utils::application_root_dir,
 };
-use amethyst_nphysics::NPhysicsBackend;
-use amethyst_physics::PhysicsBundle;
 use amethyst_tiles::RenderTiles2D;
 
-use game::GameState;
+use load::LoadState;
+use prefabs::PlayerPrefab;
 use tiles::MiscTile;
 
 fn main() -> amethyst::Result<()> {
@@ -44,10 +39,7 @@ fn main() -> amethyst::Result<()> {
     let display_config_path = app_root.join("config").join("display.ron");
     let binding_path = app_root.join("config").join("bindings.ron");
 
-    let input_bundle =
-        InputBundle::<StringBindings>::new().with_bindings_from_file(binding_path)?;
-
-    let game_data = GameDataBuilder::default()
+    let game_data = GameDataBuilder::new()
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(
@@ -59,25 +51,21 @@ fn main() -> amethyst::Result<()> {
                 .with_plugin(RenderTiles2D::<MiscTile>::default()),
         )?
         .with_bundle(TransformBundle::new())?
-        .with_bundle(input_bundle)?
+        .with_bundle(InputBundle::<StringBindings>::new().with_bindings_from_file(binding_path)?)?
         .with_bundle(UiBundle::<StringBindings>::new())?
         .with_bundle(AudioBundle::default())?
-        .with_bundle(
-            PhysicsBundle::<f32, NPhysicsBackend>::new()
-                .with_pre_physics(
-                    systems::PlayerInputSystem::default(),
-                    String::from("player_input_system"),
-                    vec![],
-                )
-                .with_frames_per_seconds(60)
-                .with_max_sub_steps(8),
-        )?;
+        .with_system_desc(
+            PrefabLoaderSystemDesc::<PlayerPrefab>::default(),
+            "player_loader",
+            &[],
+        );
 
     let assets_dir = app_root.join("assets");
-    let mut game: CoreApplication<'_, GameData<'static, 'static>, StateEvent, StateEventReader> =
-        ApplicationBuilder::new(assets_dir, GameState::default())?
+    let mut game =
+        ApplicationBuilder::<_, _, _, StateEventReader>::new(assets_dir, LoadState::default())?
             .with_frame_limit(FrameRateLimitStrategy::Yield, 24)
             .build(game_data)?;
+
     game.run();
     Ok(())
 }

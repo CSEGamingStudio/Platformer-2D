@@ -1,15 +1,15 @@
 //! The system which handle the player input
 
 use amethyst::{
-    core::{math::Vector3, SystemDesc, Transform},
+    core::SystemDesc,
     derive::SystemDesc,
     ecs::prelude::*,
     input::{InputHandler, StringBindings},
     renderer::sprite::SpriteRender,
 };
-use amethyst_physics::prelude::*;
+use nphysics2d::object::DefaultBodySet;
 
-use crate::components::{Movable, Player};
+use crate::components::{Player, RigidBodyComponent};
 
 #[derive(Default, SystemDesc)]
 pub struct PlayerInputSystem;
@@ -17,34 +17,21 @@ pub struct PlayerInputSystem;
 impl<'s> System<'s> for PlayerInputSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
-        WriteStorage<'s, Transform>,
         ReadStorage<'s, Player>,
         WriteStorage<'s, SpriteRender>,
         Read<'s, InputHandler<StringBindings>>,
-        Read<'s, PhysicsTime>,
-        ReadExpect<'s, PhysicsWorld<f32>>,
-        ReadStorage<'s, PhysicsHandle<PhysicsRigidBodyTag>>,
-        ReadStorage<'s, Movable>,
+        WriteExpect<'s, DefaultBodySet<f32>>,
+        ReadStorage<'s, RigidBodyComponent>,
     );
 
-    fn run(
-        &mut self,
-        (mut transforms, players, mut sprites, input, time, world, rigid_bodies, movables): Self::SystemData,
-    ) {
-        for (_transform, _player, sprite, rigid_body, _movable) in (
-            &mut transforms,
-            &players,
-            &mut sprites,
-            &rigid_bodies,
-            &movables,
-        )
-            .join()
-        {
+    fn run(&mut self, (players, mut sprites, input, mut body_set, rigid_bodies): Self::SystemData) {
+        for (_player, sprite, rigid_body) in (&players, &mut sprites, &rigid_bodies).join() {
             let movement = input.axis_value("movement");
+            let body = body_set.rigid_body_mut(rigid_body.handle).unwrap();
 
             if let Some(mv_amount) = movement {
                 if mv_amount != 0.0 {
-                    let scaled_amount = time.delta_seconds() * 1_000_000. * mv_amount as f32;
+                    let scaled_amount = 10.0 * mv_amount as f32;
                     sprite.sprite_number = match sprite.sprite_number {
                         0 => 1,
                         1 => 2,
@@ -52,9 +39,8 @@ impl<'s> System<'s> for PlayerInputSystem {
                         _ => unreachable!(),
                     };
 
-                    world
-                        .rigid_body_server()
-                        .apply_impulse(rigid_body.get(), &Vector3::new(scaled_amount, 0.0, 0.0));
+                    let velocity = body.velocity().linear + na::Vector2::new(scaled_amount, 0.0);
+                    body.set_linear_velocity(velocity);
                 } else {
                     sprite.sprite_number = 0;
                 }
@@ -65,19 +51,8 @@ impl<'s> System<'s> for PlayerInputSystem {
             let jump = input.action_is_down("jump").unwrap_or(false);
             let is_on_ground = true;
             if jump && is_on_ground {
-                world
-                    .rigid_body_server()
-                    .apply_impulse(rigid_body.get(), &Vector3::new(0.0, 10_000.0, 0.0));
-            }
-
-            let velocity = world.rigid_body_server().linear_velocity(rigid_body.get());
-            if velocity.iter().any(|coord| coord.abs() > 100.0) {
-                world.rigid_body_server().set_linear_velocity(
-                    rigid_body.get(),
-                    &Vector3::from_iterator(
-                        velocity.iter().map(|coord| coord.max(-100.0).min(100.0)),
-                    ),
-                )
+                let velocity = body.velocity().linear + na::Vector2::new(0.0, 10.0);
+                body.set_linear_velocity(velocity);
             }
         }
     }
