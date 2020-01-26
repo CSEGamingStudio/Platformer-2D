@@ -1,1 +1,1 @@
-"A readme." 
+Platformer-2D (the name is not definitive) is a platformer game made with the Amethyst game engine with the Rust programming language.

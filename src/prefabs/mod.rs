@@ -37,18 +37,6 @@ impl From<(f32, f32)> for F32F32 {
         Self(x.0, x.1)
     }
 }
-
-#[derive(Deserialize, Serialize, PrefabData, PartialEq, Copy, Clone, Component, Debug, Default)]
-#[prefab(Component)]
-#[serde(deny_unknown_fields)]
-pub struct F32F32F32(pub f32, pub f32, pub f32);
-
-impl From<(f32, f32, f32)> for F32F32F32 {
-    fn from(x: (f32, f32, f32)) -> Self {
-        Self(x.0, x.1, x.2)
-    }
-}
-
 #[derive(Deserialize, Serialize, PrefabData, PartialEq, Copy, Clone, Component, Debug, Default)]
 #[prefab(Component)]
 #[serde(deny_unknown_fields)]
@@ -74,17 +62,6 @@ pub struct U32U32(pub u32, pub u32);
 impl From<(u32, u32)> for U32U32 {
     fn from(x: (u32, u32)) -> Self {
         Self(x.0, x.1)
-    }
-}
-
-#[derive(Deserialize, Serialize, PrefabData, PartialEq, Copy, Clone, Component, Debug, Default)]
-#[prefab(Component)]
-#[serde(deny_unknown_fields)]
-pub struct U32U32U32(pub u32, pub u32, pub u32);
-
-impl From<(u32, u32, u32)> for U32U32U32 {
-    fn from(x: (u32, u32, u32)) -> Self {
-        Self(x.0, x.1, x.2)
     }
 }
 

@@ -26,7 +26,7 @@ pub struct LoadState {
     tile_map_sprite_sheet: Option<Handle<SpriteSheet>>,
 }
 
-impl SimpleState for LoadState {
+impl<'a, 'b> SimpleState for LoadState {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
         let world = data.world;
 
@@ -41,17 +41,18 @@ impl SimpleState for LoadState {
         self.tile_map_sprite_sheet = Some(tile_map_sheet_handle);
     }
 
-    fn update(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
+    fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
+        data.data.update(&data.world);
         if !self.progress.is_complete() {
             return Trans::None;
         }
 
-        Trans::Switch(Box::new(GameState {
-            progress: ProgressCounter::new(),
-            player_prefab: self.player.clone(),
-            player_sprite_sheet: self.player_sprite_sheet.clone(),
-            tile_map_sprite_sheet: self.tile_map_sprite_sheet.clone(),
-        }))
+        Trans::Switch(Box::new(GameState::new(
+            ProgressCounter::new(),
+            self.player.clone(),
+            self.player_sprite_sheet.clone(),
+            self.tile_map_sprite_sheet.clone(),
+        )))
     }
 }
 

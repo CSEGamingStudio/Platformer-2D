@@ -2,10 +2,7 @@
 
 use amethyst::{
     assets::{AssetStorage, Handle, Prefab, ProgressCounter},
-    core::{
-        math::{Isometry3, Point3, Translation, Vector3},
-        Parent, Time, Transform,
-    },
+    core::{math, Parent, SystemBundle, Time, Transform},
     ecs::prelude::*,
     prelude::*,
     renderer::{
@@ -14,40 +11,126 @@ use amethyst::{
     },
     utils::application_root_dir,
 };
-use amethyst_physics::{objects::PhysicsShapeTag, prelude::*};
 use amethyst_tiles::{Tile, TileMap};
+use ncollide2d::shape::{Capsule, Compound, ConvexPolygon, Cuboid, Polyline, Shape, ShapeHandle};
+use nphysics2d::{
+    force_generator::DefaultForceGeneratorSet,
+    joint::DefaultJointConstraintSet,
+    material::{BasicMaterial, MaterialHandle},
+    object::{
+        BodyPartHandle, BodyStatus, ColliderDesc, DefaultBodySet, DefaultColliderSet, RigidBodyDesc,
+    },
+    world::{DefaultGeometricalWorld, DefaultMechanicalWorld},
+};
 use tiled::{Map, ObjectShape};
 
+use std::sync::Arc;
+
 use crate::{
-    components::{Damageable, Movable, Player, Team},
+    components::{ColliderComponent, Damageable, Player, RigidBodyComponent, Team},
     prefabs::PlayerPrefab,
+    systems::physics::PhysicsBundle,
     tiles::{load_map, MiscTile},
 };
 
+#[derive(Clone)]
+pub struct Ellipse {
+    a: f32, // The first radius
+    b: f32, // The second radius
+}
+
+impl Ellipse {
+    pub fn new(a: f32, b: f32) -> Self {
+        Self { a, b }
+    }
+}
+
+use ncollide2d::{
+    bounding_volume::{self, AABB},
+    shape::{FeatureId, SupportMap},
+};
+
+impl SupportMap<f32> for Ellipse {
+    fn support_point(
+        &self,
+        transform: &na::Isometry2<f32>,
+        dir: &na::Vector2<f32>,
+    ) -> na::Point2<f32> {
+        // Bring `dir` into the ellipse's local frame.
+        let local_dir = transform.inverse_transform_vector(dir);
+
+        // Compute the denominator.
+        let denom = f32::sqrt(
+            local_dir.x * local_dir.x * self.a * self.a
+                + local_dir.y * local_dir.y * self.b * self.b,
+        );
+
+        // Compute the support point into the ellipse's local frame.
+        let local_support_point = na::Point2::new(
+            self.a * self.a * local_dir.x / denom,
+            self.b * self.b * local_dir.y / denom,
+        );
+
+        // Return the support point transformed back into the global frame.
+        *transform * local_support_point
+    }
+}
+
+impl Shape<f32> for Ellipse {
+    fn aabb(&self, m: &na::Isometry2<f32>) -> AABB<f32> {
+        // Generic method to compute the aabb of a support-mapped shape.
+        bounding_volume::support_map_aabb(m, self)
+    }
+
+    fn as_support_map(&self) -> Option<&dyn SupportMap<f32>> {
+        Some(self)
+    }
+
+    fn tangent_cone_contains_dir(
+        &self,
+        _feature: FeatureId,
+        _isometry: &na::Isometry2<f32>,
+        _deformation: Option<&[f32]>,
+        _dir: &na::Unit<na::Vector2<f32>>,
+    ) -> bool {
+        false
+    }
+}
+
 /// The game state
 #[derive(Default)]
-pub struct GameState {
+pub struct GameState<'a, 'b> {
     pub progress: ProgressCounter,
     pub player_prefab: Option<Handle<Prefab<PlayerPrefab>>>,
     pub player_sprite_sheet: Option<Handle<SpriteSheet>>,
     pub tile_map_sprite_sheet: Option<Handle<SpriteSheet>>,
+    dispatcher: Option<Dispatcher<'a, 'b>>,
 }
 
-impl SimpleState for GameState {
+impl<'a, 'b> SimpleState for GameState<'a, 'b> {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
         let world = data.world;
+
+        let mut dispatcher_builder = DispatcherBuilder::new();
+        let bundle = PhysicsBundle;
+        bundle.build(world, &mut dispatcher_builder).unwrap();
+        let mut dispatcher = dispatcher_builder.build();
+        dispatcher.setup(world);
+        self.dispatcher = Some(dispatcher);
 
         world.register::<Damageable>();
         world.register::<Team>();
         world.register::<Player>();
-        world.register::<PhysicsHandle<PhysicsShapeTag>>();
+        world.register::<RigidBodyComponent>();
+        world.register::<ColliderComponent>();
 
+        self.initialise_physics(world);
         let player = self.initialise_player(world, self.player_sprite_sheet.clone().unwrap());
         self.initialise_camera(world, player);
         self.initialise_map(world);
 
         let mut time = world.write_resource::<Time>();
-        time.set_fixed_seconds(1. / 60.);
+        time.set_fixed_seconds(1.0 / 60.0);
     }
 
     fn handle_event(
@@ -57,9 +140,52 @@ impl SimpleState for GameState {
     ) -> SimpleTrans {
         Trans::None
     }
+
+    fn update(&mut self, data: &mut StateData<GameData>) -> SimpleTrans {
+        data.data.update(&data.world);
+        if let Some(dispatcher) = self.dispatcher.as_mut() {
+            dispatcher.dispatch(&data.world);
+        }
+        Trans::None
+    }
 }
 
-impl GameState {
+impl<'a, 'b> GameState<'a, 'b> {
+    pub fn new(
+        progress: ProgressCounter,
+        player_prefab: Option<Handle<Prefab<PlayerPrefab>>>,
+        player_sprite_sheet: Option<Handle<SpriteSheet>>,
+        tile_map_sprite_sheet: Option<Handle<SpriteSheet>>,
+    ) -> Self {
+        Self {
+            progress,
+            player_prefab,
+            player_sprite_sheet,
+            tile_map_sprite_sheet,
+            dispatcher: None,
+        }
+    }
+
+    fn initialise_physics(&self, world: &mut World) {
+        let mut mechanical_world =
+            DefaultMechanicalWorld::<f32>::new(na::Vector2::new(0.0, -9.81 * 10.0));
+        mechanical_world.set_timestep(1.0 / 60.0);
+        let geometrical_world = DefaultGeometricalWorld::<f32>::new();
+
+        world.insert(mechanical_world);
+        world.insert(geometrical_world);
+
+        let bodies = DefaultBodySet::<f32>::new();
+        let colliders = DefaultColliderSet::<f32>::new();
+        let joint_constraints = DefaultJointConstraintSet::<f32>::new();
+        let force_generators = DefaultForceGeneratorSet::<f32>::new();
+
+        world.insert(bodies);
+        world.insert(colliders);
+        world.insert(joint_constraints);
+        world.insert(force_generators);
+    }
+
     fn initialise_player(
         &mut self,
         world: &mut World,
@@ -70,18 +196,6 @@ impl GameState {
             sprite_sheet: sprite_sheet.clone(),
             sprite_number: 0,
         };
-        let (half_height, radius);
-        let shape = {
-            half_height = 9.0;
-            radius = 5.0;
-            let desc = ShapeDesc::Capsule {
-                half_height,
-                radius,
-            };
-            let physic_world = world.read_resource::<PhysicsWorld<f32>>();
-            physic_world.shape_server().create(&desc)
-        };
-
         let (mass, friction, bounciness, pos) = {
             let mut storage = world.write_resource::<AssetStorage<Prefab<PlayerPrefab>>>();
             let prefab = storage
@@ -99,36 +213,38 @@ impl GameState {
                 prefab.pos,
             )
         };
+        let (half_height, radius) = (9.0, 5.0);
 
-        let rigid_body = {
-            let desc = RigidBodyDesc {
-                mode: BodyMode::Dynamic,
-                mass,
-                bounciness,
-                friction,
-                belong_to: vec![CollisionGroup::new(0)],
-                collide_with: vec![CollisionGroup::new(0)],
-                contacts_to_report: 3,
-                lock_translation_z: true,
-                lock_rotation_x: true,
-                lock_rotation_y: true,
-                lock_rotation_z: true,
-                ..Default::default()
-            };
-            let physic_world = world.read_resource::<PhysicsWorld<f32>>();
-            physic_world.rigid_body_server().create(&desc)
-        };
+        let rigid_body = RigidBodyDesc::new()
+            .translation(na::Vector2::new(pos.0, pos.1))
+            .mass(mass)
+            .local_center_of_mass(na::Point2::new(radius * 2.0, half_height))
+            .kinematic_rotations(true)
+            .build();
+        let rigid_body_component = RigidBodyComponent::new(rigid_body, world);
+
+        let shape = ShapeHandle::new(Capsule::new(half_height, radius));
+        let collider = ColliderDesc::new(shape)
+            .density(1.0)
+            .material(MaterialHandle::new(BasicMaterial::new(
+                bounciness, friction,
+            )))
+            .build(BodyPartHandle(rigid_body_component.handle, 0));
+        let collider_component = ColliderComponent::new(collider, world);
 
         world
             .create_entity()
-            .with(Transform::from(Vector3::new(pos.0 + radius * 2.0, pos.1 + half_height, pos.2)))
+            .with(Transform::from(math::Vector3::new(
+                pos.0 + radius * 2.0,
+                pos.1 + half_height,
+                0.0,
+            )))
             .with(damageable)
             .with(Team::Allies)
             .with(Player)
             .with(sprite_render)
-            .with(shape)
-            .with(rigid_body)
-            .with(Movable)
+            .with(collider_component)
+            .with(rigid_body_component)
             .build()
     }
 
@@ -168,8 +284,8 @@ impl GameState {
         world.insert(map);
 
         let map_component = TileMap::<MiscTile>::new(
-            Vector3::new(width, height, 1),
-            Vector3::new(tile_width, tile_height, 1),
+            math::Vector3::new(width, height, 1),
+            math::Vector3::new(tile_width, tile_height, 1),
             self.tile_map_sprite_sheet.clone(),
         );
 
@@ -187,86 +303,96 @@ impl GameState {
             .enumerate()
         {
             for (y, _column) in row.iter().enumerate() {
-                let transform = Transform::from(Vector3::new(
+                let transform = Transform::from(math::Vector3::new(
                     (x as f32 * tile_width as f32) - (width as f32 * tile_width as f32) / 2.0,
                     -((y as f32 * tile_height as f32) - (height as f32 * tile_height as f32) / 2.0), // because the y-axis is inverted
                     0.0,
                 ));
 
-                let mut entity = world.create_entity_unchecked().with(transform);
-                let tile = MiscTile.sprite(Point3::new(x as u32, y as u32, 0), &world);
+                let tile = MiscTile.sprite(math::Point3::new(x as u32, y as u32, 0), &world);
                 if tile.is_none()
                     || tiles.get(tile.unwrap()).is_none()
                     || tiles[tile.unwrap()].objectgroup.is_none()
                 {
-                    entity.build();
                     continue;
                 }
 
+                let (rigid_body_component, collider);
                 {
-                    let physic_world = world.read_resource::<PhysicsWorld<f32>>();
                     let mut shapes = Vec::new();
                     for object in &tiles[tile.unwrap()].objectgroup.as_ref().unwrap().objects {
-                        let shape = match &object.shape {
-                            ObjectShape::Rect { width, height } => Some(ShapeDesc::Cube {
-                                half_extents: Vector3::new(width / 2.0, height / 2.0, 0.0),
-                            }),
-                            ObjectShape::Polygon { points } => {
-                                for index in 1..(points.len() - 1) {
-                                    let shape = ShapeDesc::Convex {
-                                        points: [points[0], points[index], points[index + 1]]
-                                            .iter()
-                                            .map(|point| Point3::new(point.0, point.1, 0.0))
-                                            .collect(),
-                                    };
-                                    let mut isometry = Isometry3::identity();
-                                    isometry.append_translation_mut(&Translation::from(Vector3::new(
-                                        x as f32 + object.x,
-                                        y as f32 + object.y,
-                                        0.0,
-                                    )));
-                                    shapes.push((isometry, shape));
-                                }
-                                
-                                None
-                            },
-                            _ => None,
+                        let shape: Option<Arc<dyn Shape<f32>>> = match &object.shape {
+                            ObjectShape::Rect { width, height } => Some(Arc::new(Cuboid::new(
+                                na::Vector2::new(width / 2.0, height / 2.0),
+                            ))),
+                            ObjectShape::Polygon { points } => Some(Arc::new(
+                                ConvexPolygon::try_from_points(
+                                    &points
+                                        .iter()
+                                        .map(|point| na::Point2::new(point.0, point.1))
+                                        .collect::<Vec<_>>(),
+                                )
+                                .unwrap_or_else(|| {
+                                    panic!(
+                                        "can't build a ConvexHull from the given points : {:#?}",
+                                        points
+                                    )
+                                }),
+                            )),
+                            ObjectShape::Polyline { points } => Some(Arc::new(Polyline::new(
+                                points
+                                    .iter()
+                                    .map(|point| na::Point2::new(point.0, point.1))
+                                    .collect(),
+                                None,
+                            ))),
+                            ObjectShape::Ellipse { width, height } => {
+                                Some(Arc::new(Ellipse::new(width / 2.0, height / 2.0)))
+                            }
                         };
+
                         if let Some(shape) = shape {
-                            let mut isometry = Isometry3::identity();
-                            isometry.append_translation_mut(&Translation::from(Vector3::new(
-                                x as f32 + object.x,
-                                y as f32 + object.y,
-                                0.0,
-                            )));
-                            shapes.push((isometry, shape));
+                            shapes.push((
+                                na::Isometry2::translation(object.x, object.y),
+                                ShapeHandle::from_arc(shape),
+                            ));
                         }
                     }
-                    if !shapes.is_empty() {
-                        let desc = ShapeDesc::Compound { shapes };
-                        let shape = physic_world.shape_server().create(&desc);
-                        entity = entity.with(shape);
-                    }
 
-                    let desc = RigidBodyDesc {
-                        mode: BodyMode::Static,
-                        bounciness: 0.0,
-                        friction: 0.95,
-                        belong_to: vec![CollisionGroup::new(0)],
-                        collide_with: vec![CollisionGroup::new(0)],
-                        lock_translation_x: true,
-                        lock_translation_y: true,
-                        lock_translation_z: true,
-                        lock_rotation_x: true,
-                        lock_rotation_y: true,
-                        lock_rotation_z: true,
-                        ..Default::default()
+                    let rigid_body = RigidBodyDesc::new()
+                        .translation(na::Vector2::new(
+                            (x as f32 * tile_width as f32)
+                                - (width as f32 * tile_width as f32) / 2.0,
+                            (y as f32 * tile_height as f32)
+                                - (height as f32 * tile_height as f32) / 2.0,
+                        ))
+                        .gravity_enabled(false)
+                        .status(BodyStatus::Static)
+                        .kinematic_translations(na::Vector2::new(true, true))
+                        .kinematic_rotations(true)
+                        .build();
+
+                    rigid_body_component = RigidBodyComponent::new(rigid_body, world);
+
+                    collider = if !shapes.is_empty() {
+                        let collider = ColliderDesc::new(ShapeHandle::new(Compound::new(shapes)))
+                            .material(MaterialHandle::new(BasicMaterial::new(0.0, 1.0)))
+                            .build(BodyPartHandle(rigid_body_component.handle, 0));
+                        Some(ColliderComponent::new(collider, world))
+                    } else {
+                        None
                     };
-                    let rigid_body = physic_world.rigid_body_server().create(&desc);
-                    entity = entity.with(rigid_body);
                 }
 
-                entity.build();
+                let mut entity_builder = world.create_entity_unchecked().with(transform);
+
+                if let Some(collider_component) = collider {
+                    entity_builder = entity_builder
+                        .with(rigid_body_component)
+                        .with(collider_component);
+                }
+
+                entity_builder.build();
             }
         }
     }

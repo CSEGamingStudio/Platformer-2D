@@ -5,8 +5,8 @@ Prefab(
             data: PlayerPrefab(
                 mass: F32(100.0),
                 friction: F32(0.95),
-                bounciness: F32(0.0),
-                pos: F32F32F32(0.0, 50.0, 0.0),
+                bounciness: F32(2.0),
+                pos: F32F32(0.0, 100.0),
             )
         )
     ]
