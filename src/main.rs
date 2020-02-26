@@ -23,14 +23,16 @@ use amethyst::{
         types::DefaultBackend,
         RenderingBundle,
     },
+    tiles::{MortonEncoder2D, RenderTiles2D},
     ui::{RenderUi, UiBundle},
     utils::application_root_dir,
 };
-use amethyst_tiles::RenderTiles2D;
 
-use load::LoadState;
-use prefabs::PlayerPrefab;
-use tiles::MiscTile;
+use crate::{
+    load::LoadState,
+    prefabs::PlayerPrefab,
+    tiles::{DrawTilesBounds, MiscTile},
+};
 
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
@@ -48,7 +50,9 @@ fn main() -> amethyst::Result<()> {
                 )
                 .with_plugin(RenderFlat2D::default())
                 .with_plugin(RenderUi::default())
-                .with_plugin(RenderTiles2D::<MiscTile>::default()),
+                .with_plugin(
+                    RenderTiles2D::<MiscTile, _, _>::default(),
+                ),
         )?
         .with_bundle(TransformBundle::new())?
         .with_bundle(InputBundle::<StringBindings>::new().with_bindings_from_file(binding_path)?)?

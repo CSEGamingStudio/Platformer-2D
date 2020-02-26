@@ -26,7 +26,7 @@ impl Default for PlayerPrefab {
             mass: F32(100.0),
             friction: F32(0.95),
             bounciness: F32(0.95),
-            pos: F32F32(0.0, 50.0),
+            pos: F32F32(100.0, 50.0),
         }
     }
 }

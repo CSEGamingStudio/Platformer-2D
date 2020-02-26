@@ -7,8 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-amethyst = { version = "0.13", features = ["vulkan"] }
-amethyst_tiles = "0.1"
+amethyst = { version = "0.13", features = ["vulkan", "tiles"] }
 serde = { version = "1.0", features = ["derive"] }
 tiled = "0.8"
 nalgebra = "0.19"
