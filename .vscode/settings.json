@@ -1,0 +1,5 @@
+{
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "editor.defaultFormatter": "Connorcpu.vsc-rustfmt",
+}

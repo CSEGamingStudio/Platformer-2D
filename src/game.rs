@@ -9,9 +9,10 @@ use amethyst::{
         sprite::{SpriteRender, SpriteSheet},
         Camera,
     },
+    tiles::{Tile, TileMap},
     utils::application_root_dir,
+    window::ScreenDimensions,
 };
-use amethyst_tiles::{Tile, TileMap};
 use ncollide2d::shape::{Capsule, Compound, ConvexPolygon, Cuboid, Polyline, Shape, ShapeHandle};
 use nphysics2d::{
     force_generator::DefaultForceGeneratorSet,
@@ -252,12 +253,10 @@ impl<'a, 'b> GameState<'a, 'b> {
         let mut transform = Transform::default();
         transform.set_translation_z(1.0);
 
-        let (width, height) = /* {
-            println!("before");
+        let (width, height) = {
             let dim = world.read_resource::<ScreenDimensions>();
-            println!("after");
-            (dim.width(), dim.height())
-        }; */ (800.0, 600.0);
+            (dim.width() / 2.0, dim.height() / 2.0)
+        };
 
         world
             .create_entity()
@@ -280,7 +279,7 @@ impl<'a, 'b> GameState<'a, 'b> {
         let height = map.height;
         let tile_width = map.tile_width;
         let tile_height = map.tile_height;
-
+        println!("{} {} {} {}", width, height, tile_width, tile_height);
         world.insert(map);
 
         let map_component = TileMap::<MiscTile>::new(
